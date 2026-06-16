@@ -96,6 +96,7 @@ class LlamaCppLLM(BaseLLM):
         prompt: str,
         stream: bool = False,
         on_token=None,
+        max_tokens: int | None = None,
     ) -> str:
         """
         Generate text from the model.
@@ -104,21 +105,26 @@ class LlamaCppLLM(BaseLLM):
             prompt: Input prompt.
             stream: Whether to stream tokens.
             on_token: Optional callback for streamed tokens.
+            max_tokens: Optional override for output token count.
 
         Returns:
             Generated text.
         """
+
+        n_predict = max_tokens if max_tokens is not None else self.n_predict
+
         if stream:
             return self._generate_stream(
                 prompt=prompt,
                 on_token=on_token,
+                max_tokens=n_predict,
             )
 
         response = requests.post(
             f"{self.base_url}/completion",
             json={
                 "prompt": prompt,
-                "n_predict": self.n_predict,
+                "n_predict": n_predict,
                 "temperature": self.temperature,
                 "top_p": self.top_p,
                 "stream": False,
