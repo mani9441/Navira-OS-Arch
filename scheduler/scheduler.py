@@ -12,14 +12,12 @@ class Scheduler:
         self.paused_queue = {}
 
     def enqueue(self, process):
-        """Pushes the process and executable tuple onto the ready queue."""
+        """Pushes the process onto the ready queue."""
         self.ready_queue.append(process)
 
     def dequeue(self):
-
         if not self.ready_queue:
             return None
-
         return self.ready_queue.popleft()
 
     def mark_running(self, process_id, process):
@@ -33,15 +31,10 @@ class Scheduler:
     def dispatch(self):
         """Dequeues the next process and registers it to the running queue."""
         process = self.dequeue()
-
         if process is None:
             return None
 
-        self.mark_running(
-            process.id,
-            process
-        )
-
+        self.mark_running(process.id, process)
         return process
 
     def wait(self, process_id):
@@ -52,6 +45,8 @@ class Scheduler:
 
     def wake(self, process_id):
         """Transitions a process from WAITING back to READY."""
+        # ─── FIXED ───
+        # Changed self.running_queue.pop to self.waiting_queue.pop
         item = self.waiting_queue.pop(process_id, None)
         if item:
             self.ready_queue.append(item)

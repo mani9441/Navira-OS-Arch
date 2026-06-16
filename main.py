@@ -1,6 +1,7 @@
 import asyncio
 import sys
 
+from capabilities.registry import capability_registry, initialize_and_sync_inventory, vector_db
 from runtime import context_engine
 
 from runtime.kernel import NaviraKernal
@@ -17,7 +18,6 @@ from messaging.event_manager import EventManager
 from memory.memory_manager import MemoryManager
 from resources.resource_manager import ResourceManager
 
-from capabilities.registry.capability_registry import CapabilityRegistry
 from registry.workflow_registry import WorkflowRegistry
 from registry.team_registry import TeamRegistry
 
@@ -36,26 +36,58 @@ from human.human_manager import HumanManager
 from agents.conversation_agent import ConversationAgent
 
 
-async def shell(conversation_agent: ConversationAgent):
-    """Handles the interactive CLI loop for the Foundra agent."""
-    while True:
-        # Prevents blocking the async loop waiting for terminal input
-        query = await asyncio.to_thread(input, "\nFoundra > ")
+async def shell(conversation_agent: ConversationAgent, human_manager: HumanManager, event_manager: EventManager):
+    """Handles the interactive CLI loop with awareness of pending human input requests via Event System."""
+    
+    # Internal dictionary to track requests waiting for terminal response
+    pending_prompts = {}
 
-        if query.strip().lower() == "exit":
+    # Event handler callbacks to keep the shell synchronized
+    async def on_human_requested(event):
+        req_id = event.payload.get("request_id")
+        if req_id:
+            pending_prompts[req_id] = event.source
+
+    async def on_human_responded(event):
+        req_id = event.payload.get("request_id")
+        pending_prompts.pop(req_id, None)
+
+    # Dynamically subscribe our shell listeners to the event pipeline
+    event_manager.subscribe("human.requested", on_human_requested)
+    event_manager.subscribe("human.responded", on_human_responded)
+
+    while True:
+        query = await asyncio.to_thread(input, "\nFoundra > ")
+        clean_query = query.strip()
+
+        if clean_query.lower() == "exit":
             print("Exiting Foundra...")
             break
 
-        if not query.strip():
+        if not clean_query:
             continue
 
-        result = await conversation_agent.handle_message(query=query)
+        # ─── STATE CHECK: IS A PROCESS WAITING ON THE TERMINAL? ───
+        if pending_prompts:
+            # Grab the active request ID waiting for an answer
+            request_id = list(pending_prompts.keys())[0]
+            process_id = pending_prompts[request_id]
+            
+            print(f"[REPLYING] Sending input to process {process_id} for request {request_id}...")
+            
+            # ─── FIXED HERE ───
+            # Called '.respond()' instead of '.provide_input()' 
+            # and passed 'clean_query' directly as the response string.
+            await human_manager.respond(request_id=request_id, response=clean_query)
+            continue
+
+        # ─── DEFAULT ROUTE: INSTRUCTION MODE ───
+        result = await conversation_agent.handle_message(query=clean_query)
 
         if result.success:
             print(f"Process Started: {result.process_id}")
         else:
             print(f"Error: {result.error}")
-
 
 async def main():
     # --------------------------------------------------
@@ -75,7 +107,7 @@ async def main():
     human_manager = HumanManager(event_manager)
     memory_manager = MemoryManager()
 
-    capability_registry = CapabilityRegistry()
+    
     workflow_registry = WorkflowRegistry()
     team_registry = TeamRegistry()
 
@@ -87,27 +119,15 @@ async def main():
     # --------------------------------------------------
     # REGISTRATIONS
     # --------------------------------------------------
-    capability_registry.register(
-        name="weather",
-        capability=WeatherCapability(),
-        keywords=["weather", "temperature", "forecast", "climate", "rain", "condition"],
-        metadata={"status": "active"}
-    )
-    
+
+    await initialize_and_sync_inventory()
+
+        
     workflow_registry.register("crop_irrigation", IrrigationWorkflow())
     team_registry.register("research", ResearchTeam())
 
-    event_manager.subscribe("human.requested", scheduler_handler.on_human_requested)
-    event_manager.subscribe("human.responded", scheduler_handler.on_human_responded)
-
-    # --------------------------------------------------
-    # KERNEL
-    # --------------------------------------------------
-    kernel = NaviraKernal(
-        process_manager=process_manager,
-        scheduler=scheduler,
-        event_manager=event_manager
-    )
+    # event_manager.subscribe("human.requested", scheduler_handler.on_human_requested)
+    # event_manager.subscribe("human.responded", scheduler_handler.on_human_responded)
 
     # --------------------------------------------------
     # RUNTIMES
@@ -131,6 +151,18 @@ async def main():
         resource_manager=resource_manager,
         memory_manager=memory_manager,
         human_manager=human_manager
+    )
+
+    # --------------------------------------------------
+    # KERNEL
+    # --------------------------------------------------
+    kernel = NaviraKernal(
+        process_manager=process_manager,
+        scheduler=scheduler,
+        event_manager=event_manager,
+        capability_runtime=capability_runtime,
+        workflow_runtime=workflow_runtime,
+        team_runtime=team_runtime
     )
 
     # --------------------------------------------------
@@ -182,8 +214,8 @@ async def main():
     print("\n--- Foundra Kernel Started ---")
     
     try:
-        # Instead of a hardcoded test request + sleep, pass execution to the interactive shell
-        await shell(conversation_agent)
+        # Pass the event_manager to the shell so it can track request states live
+        await shell(conversation_agent, human_manager, event_manager)
     finally:
         # Clean up background worker tasks upon shell termination
         executor_task.cancel()

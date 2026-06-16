@@ -1,21 +1,34 @@
+# capabilities/registry/capability_registry.py
+from typing import Dict, List, Optional, Any
+
 class CapabilityRegistry:
     def __init__(self):
-        self.capabilities = {}
-        self.keywords = {}
-        self.metadata = {}
+        self._capabilities: Dict[str, Any] = {}
 
-    def register(self, name: str, capability, keywords: list[str], metadata: dict = None):
-        """Registers a capability along with explicit matching keywords and metadata."""
-        self.capabilities[name] = capability
-        # Store all keywords in lowercase for case-insensitive matching
-        self.keywords[name] = [kw.lower() for kw in keywords]
-        self.metadata[name] = metadata or {}
+    # capabilities/registry/capability_registry.py
+
+    def register(self, capability) -> None:
+        if not hasattr(capability, "name") or not capability.name:
+            raise ValueError("Capability must define a valid string attribute 'name'.")
+        
+        # 1. Register under its explicit configuration property name (e.g., 'get_weather_forecast')
+        self._capabilities[capability.name] = capability
+        
+        # 2. OLD ARCHITECTURE COMPATIBILITY FALLBACK
+        # Also register under the class name string (e.g., 'WeatherCapability')
+        class_name = capability.__class__.__name__
+        self._capabilities[class_name] = capability
+        
+        print(f"[REGISTRY] Registered core capability: '{capability.name}' (Class: {class_name})")
 
     def get(self, name: str):
-        return self.capabilities.get(name)
+        """Fetches the instance matching either property name or class name string."""
+        return self._capabilities.get(name)
 
-    def exists(self, name: str):
-        return name in self.capabilities
-
-    def list(self):
-        return list(self.capabilities.keys())
+    def list_names(self) -> List[str]:
+        # --- FIXED TYPO HERE ---
+        return list(self._capabilities.keys())
+    
+    def list_all(self) -> List[Any]:
+        # --- FIXED TYPO HERE ---
+        return list(self._capabilities.values())
