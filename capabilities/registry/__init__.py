@@ -4,7 +4,9 @@ from database.vector_db_client import VectorDBClient
 from llms.llm import get_llm
 
 # Explicitly import your capabilities
-from capabilities.weather_capability import WeatherCapability
+from capabilities.capabilities.weather.weather_capability import WeatherCapability
+from capabilities.capabilities.email.gmail_capability import GmailCapability
+
 
 # Initialize our infrastructure singletons
 capability_registry = CapabilityRegistry()
@@ -20,7 +22,8 @@ vector_db.set_llm(llm_instance)
 # Core system manifest array
 MANIFEST = [
     WeatherCapability(),
-]
+    GmailCapability(),
+    ]
 
 # 1. Synchronously populate your local RAM registry right on import
 for capability in MANIFEST:

@@ -97,6 +97,7 @@ class LlamaCppLLM(BaseLLM):
         stream: bool = False,
         on_token=None,
         max_tokens: int | None = None,
+        **kwargs,
     ) -> str:
         """
         Generate text from the model.
@@ -142,22 +143,20 @@ class LlamaCppLLM(BaseLLM):
         self,
         prompt: str,
         on_token=None,
+        max_tokens: int | None = None,
+        **kwargs,
     ) -> str:
         """
-        Stream tokens from llama.cpp using Server-Sent Events (SSE).
-
-        Args:
-            prompt: Input prompt.
-            on_token: Callback invoked for every token received.
-
-        Returns:
-            Full generated text.
+        Stream tokens from llama.cpp using SSE.
         """
+
+        n_predict = max_tokens if max_tokens is not None else self.n_predict
+
         response = requests.post(
             f"{self.base_url}/completion",
             json={
                 "prompt": prompt,
-                "n_predict": self.n_predict,
+                "n_predict": n_predict,
                 "temperature": self.temperature,
                 "top_p": self.top_p,
                 "stream": True,
@@ -201,7 +200,7 @@ class LlamaCppLLM(BaseLLM):
                 continue
 
         return full_text
-
+    
     def generate_json(self, prompt: str, **kwargs) -> dict:
         """
         Generate structured JSON output.

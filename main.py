@@ -25,7 +25,6 @@ from capabilities.capability_runtime import CapabilityRuntime
 from workflows.workflow_runtime import WorkflowRuntime
 from teams.team_runtime import TeamRuntime
 
-from capabilities.weather_capability import WeatherCapability
 from workflows.irrigation_workflow import IrrigationWorkflow
 from teams.research_team.research_team import ResearchTeam
 
